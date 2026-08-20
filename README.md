@@ -9,6 +9,7 @@
   <img alt="Java" src="https://img.shields.io/badge/Java-7%20source-e76f00?style=flat-square&labelColor=1c1c1c">
   <img alt="Node" src="https://img.shields.io/badge/Node-18%2B-5fa04e?style=flat-square&labelColor=1c1c1c">
   <img alt="No AndroidX" src="https://img.shields.io/badge/AndroidX-none-8b5cf6?style=flat-square&labelColor=1c1c1c">
+  <a href="https://github.com/Dymyt-ry/bb10-whatsapp/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Dymyt-ry/bb10-whatsapp?style=flat-square&labelColor=1c1c1c&color=0aa8d2"></a>
 </p>
 
 ---
@@ -98,6 +99,13 @@ v2 wraps the payload in a `webhook` object; v1 did not. Keep `webhookBase64`
 off — the backend fetches media on demand instead of taking it inline.
 
 ## Android
+
+A prebuilt APK is attached to [the latest release](https://github.com/Dymyt-ry/bb10-whatsapp/releases/latest),
+with a SHA-256 checksum next to it. It is signed with a debug key, which is
+fine for sideloading onto your own phone and not fine for anything else — build
+`release` with your own keystore if the APK is going anywhere.
+
+To build it yourself:
 
 ```bash
 cd android
