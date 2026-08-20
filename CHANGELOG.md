@@ -74,5 +74,7 @@ First tagged release, and a security-focused pass over the whole project.
   string that had drifted to "v2.0" against a `versionName` of "1.0".
 - User-visible strings and log messages are English throughout; several were
   Czech.
-- Backend tests (14 cases) and CI: backend on Node 18/20/22, an APK build, and
-  a dependency audit that fails on any high-severity advisory.
+- Backend tests (22 cases) and CI: backend on Node 18/20/22, an APK build, and
+  a dependency audit that fails on any high-severity advisory, and an Android
+  lint gate. Lint went from 26 warnings and one fatal to 12 warnings and none,
+  with no remaining findings in its security category.

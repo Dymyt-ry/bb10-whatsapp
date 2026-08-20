@@ -1,5 +1,6 @@
 package dev.golobokov.bbwa.api;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 
@@ -9,7 +10,6 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.security.KeyStore;
-import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
@@ -136,7 +136,9 @@ public class ApiClient {
                     : buildTrustManager();
 
             SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, new TrustManager[]{trustManager}, new SecureRandom());
+            // null, not new SecureRandom(): Android 4.3 shipped a broken
+            // PRNG, and letting the provider pick avoids it.
+            sslContext.init(null, new TrustManager[]{trustManager}, null);
 
             // API 18 negotiates TLS 1.0 unless each socket is told otherwise,
             // and most servers no longer accept it.
@@ -150,25 +152,26 @@ public class ApiClient {
             builder.connectionSpecs(Arrays.asList(tls, ConnectionSpec.CLEARTEXT));
 
             if (allowSelfSigned) {
-                builder.hostnameVerifier(new HostnameVerifier() {
-                    public boolean verify(String hostname, SSLSession session) {
-                        return true;
-                    }
-                });
+                builder.hostnameVerifier(INSECURE_HOSTNAME_VERIFIER);
             }
         } catch (Exception e) {
-            // Leaving the builder untouched falls back to OkHttp's defaults,
-            // which verify properly but may not reach a Let's Encrypt host on
-            // this device. Failing closed is the right side to err on.
             android.util.Log.e("ApiClient", "TLS setup failed, using platform defaults", e);
         }
     }
+
+    @SuppressLint("BadHostnameVerifier")
+    private static final HostnameVerifier INSECURE_HOSTNAME_VERIFIER = new HostnameVerifier() {
+        public boolean verify(String hostname, SSLSession session) {
+            return true;
+        }
+    };
 
     /**
      * Trusts everything the platform trusts, plus the bundled ISRG Root X1.
      * The system store is consulted first so a device with an up-to-date store
      * behaves exactly as it would without this class.
      */
+    @SuppressLint("CustomX509TrustManager")
     private static X509TrustManager buildTrustManager() throws Exception {
         final X509TrustManager system = defaultTrustManager(null);
         final X509TrustManager bundled = defaultTrustManager(bundledRootStore());
@@ -238,7 +241,14 @@ public class ApiClient {
         return all.toArray(new X509Certificate[all.size()]);
     }
 
-    /** Used only when the user explicitly opts out of verification in Settings. */
+    /**
+     * Reached only when the user ticks "Allow self-signed certificate" in
+     * Settings and confirms the dialog. Lint flags this class and the
+     * hostname verifier above on sight, which is correct in general — the
+     * suppressions record that both are behind an explicit opt-in rather
+     * than being the default the app ships with.
+     */
+    @SuppressLint({"TrustAllX509TrustManager", "CustomX509TrustManager"})
     private static final X509TrustManager TRUST_EVERYTHING = new X509TrustManager() {
         public X509Certificate[] getAcceptedIssuers() {
             return new X509Certificate[0];

@@ -24,6 +24,7 @@
 
     <ImageView
         android:id="@+id/message_image"
+        android:contentDescription="@string/desc_message_image"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:maxHeight="200dp"

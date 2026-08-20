@@ -36,13 +36,13 @@ public class ContactResolver {
     /** Persists a custom alias for {@code number} to SharedPreferences. */
     public static void saveAlias(Context context, String number, String alias) {
         context.getSharedPreferences(PREFS_ALIASES, Context.MODE_PRIVATE)
-               .edit().putString(number, alias).commit();
+               .edit().putString(number, alias).apply();
     }
 
     /** Removes any custom alias for {@code number} from SharedPreferences. */
     public static void removeAlias(Context context, String number) {
         context.getSharedPreferences(PREFS_ALIASES, Context.MODE_PRIVATE)
-               .edit().remove(number).commit();
+               .edit().remove(number).apply();
     }
 
     /**

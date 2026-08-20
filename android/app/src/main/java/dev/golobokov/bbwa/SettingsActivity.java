@@ -83,7 +83,7 @@ public class SettingsActivity extends Activity {
         editor.putString(ApiClient.KEY_BACKEND_URL, url);
         editor.putString(ApiClient.KEY_API_TOKEN, token);
         editor.putBoolean(ApiClient.KEY_ALLOW_SELF_SIGNED, selfSigned);
-        editor.commit();
+        editor.apply();
 
         ApiClient.configure(url, token, selfSigned);
 

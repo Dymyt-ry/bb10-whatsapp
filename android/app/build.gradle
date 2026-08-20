@@ -25,6 +25,10 @@ android {
 
     lintOptions {
         abortOnError false
+        // This APK is sideloaded onto BlackBerry 10 and Android 4.x devices;
+        // it cannot target API 31 and still run there, and it is not going to
+        // the Play Store.
+        disable 'ExpiredTargetSdkVersion'
     }
 
     compileOptions {

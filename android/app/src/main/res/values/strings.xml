@@ -20,4 +20,7 @@
     <string name="settings_required">Backend URL and API token are both required</string>
     <string name="settings_saved">Settings saved</string>
     <string name="about_title">About BBWA</string>
+    <string name="sender_you">You</string>
+    <string name="attach_image">Attach image</string>
+    <string name="desc_message_image">Image in this message</string>
 </resources>

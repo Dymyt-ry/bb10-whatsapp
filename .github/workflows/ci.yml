@@ -74,7 +74,19 @@ jobs:
           java-version: '11'
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --console=plain --no-daemon
+        run: ./gradlew assembleDebug lintDebug --console=plain --no-daemon
+      - name: Fail on any lint error
+        working-directory: android
+        run: |
+          python3 - <<'PY'
+          import sys, xml.dom.minidom as m
+          d = m.parse('app/build/reports/lint-results-debug.xml')
+          bad = [i for i in d.getElementsByTagName('issue')
+                 if i.getAttribute('severity') in ('Fatal', 'Error')]
+          for i in bad:
+              print('%s: %s' % (i.getAttribute('id'), i.getAttribute('message')))
+          sys.exit(1 if bad else 0)
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: bbwa-debug-apk

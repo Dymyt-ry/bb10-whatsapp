@@ -186,16 +186,28 @@ it somewhere you would be comfortable running a mail server.
 ## Development
 
 ```bash
-cd backend && npm test        # 14 cases, no network, no Evolution instance needed
+cd backend && npm test        # 22 cases, no network, no Evolution instance needed
 cd android  && ./gradlew assembleDebug
 ```
 
 The backend tests run the real Express app on an ephemeral port and drive it
 over HTTP, so the auth middleware, the webhook secret and the `@lid` resolution
-are all exercised as they actually ship.
+are all exercised as they actually ship. A second suite points the app at a stub
+Evolution API and asserts what it sends: the path, the instance name, the
+`apikey` header, and that a message containing a backslash or a newline arrives
+byte for byte.
 
-CI builds the APK on every push and fails on any high-severity advisory in a
-backend dependency.
+CI builds the APK on every push, fails on any lint error, and fails on any
+high-severity advisory in a backend dependency.
+
+### What is and isn't verified
+
+The backend is covered end to end. The Android app is compiled and linted in
+CI, and the APK is built from every commit — but it has not been run against a
+live Evolution instance in this repository's automation, and there is no
+emulator coverage: Google never published an `arm64-v8a` system image for API
+19, so an API 18/19 emulator cannot run on an Apple Silicon machine at all.
+Device testing is manual.
 
 ## Known limitations
 

@@ -535,7 +535,7 @@ public class MessageActivity extends Activity {
             ImageView imageView = (ImageView) convertView.findViewById(R.id.message_image);
 
             if (msg.isFromMe()) {
-                senderView.setText("You");
+                senderView.setText(R.string.sender_you);
             } else {
                 // msg.getSender() is the WhatsApp pushName, a display name
                 // rather than a number, so there is nothing to resolve.

@@ -26,7 +26,7 @@
             android:id="@+id/attach_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="+"
+            android:text="@string/attach_image"
             android:textSize="18sp"
             android:minWidth="0dp"
             android:paddingLeft="8dp"
