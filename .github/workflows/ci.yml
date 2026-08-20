@@ -57,14 +57,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # sdkmanager needs a recent JDK, the build needs 11, and setup-java sets
+      # JAVA_HOME for every step that follows it. So: SDK first, then Java.
+      - name: Install the API 19 platform
+        run: |
+          sdkmanager "platforms;android-19" "build-tools;30.0.3" > /dev/null
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '11'
-      - name: Install the API 19 platform
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            "platforms;android-19" "build-tools;30.0.3" >/dev/null
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --console=plain --no-daemon
