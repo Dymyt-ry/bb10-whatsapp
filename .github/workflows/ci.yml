@@ -61,7 +61,13 @@ jobs:
       # JAVA_HOME for every step that follows it. So: SDK first, then Java.
       - name: Install the API 19 platform
         run: |
-          sdkmanager "platforms;android-19" "build-tools;30.0.3" > /dev/null
+          SDKMANAGER=$(ls "$ANDROID_SDK_ROOT"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
+          if [ -z "$SDKMANAGER" ]; then
+            echo "sdkmanager not found under $ANDROID_SDK_ROOT"; exit 1
+          fi
+          # sdkmanager is built for a newer class file version than 11.
+          JAVA_HOME="${JAVA_HOME_17_X64:-$JAVA_HOME}" \
+            "$SDKMANAGER" "platforms;android-19" "build-tools;30.0.3" > /dev/null
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
