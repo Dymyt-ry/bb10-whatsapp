@@ -1,0 +1,24 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Android build output
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
+*.iml
+.idea/
+
+# The Gradle wrapper IS committed: it is what makes `./gradlew` work on a
+# fresh clone. Only the local wrapper cache is ignored.
+
+# OS
+.DS_Store
+Thumbs.db
