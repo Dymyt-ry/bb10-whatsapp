@@ -1,0 +1,40 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'dev.golobokov.bbwa'
+    compileSdkVersion 19
+
+    defaultConfig {
+        applicationId "dev.golobokov.bbwa"
+        minSdkVersion 18
+        targetSdkVersion 19
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    // No signingConfig here on purpose. An earlier version signed "release"
+    // with the shared Android debug keystore, which produces an APK anyone can
+    // forge an update for. Supply a real keystore through Gradle properties
+    // (see CONTRIBUTING.md) or build debug and sideload that.
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    // 3.12.x is the last OkHttp line that still supports Android 4.x / API 18.
+    implementation 'com.squareup.okhttp3:okhttp:3.12.13'
+    implementation 'com.google.code.gson:gson:2.8.9'
+}
