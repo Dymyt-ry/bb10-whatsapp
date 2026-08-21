@@ -2,6 +2,30 @@
 
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1] — 2026-08-21
+
+Security and reliability follow-up for the prebuilt APK and webhook backend.
+
+### Security
+- Backend URLs are canonicalised and require HTTPS by default. Plain HTTP and
+  self-signed certificates each need a separate, explicit warning confirmation.
+- The API token is sent only to the configured scheme, host and port; redirects
+  are disabled so it cannot follow a response to another origin.
+- `WEBHOOK_SECRET` is mandatory, at least 16 characters, and restricted to
+  route-safe ASCII. Malformed webhook requests redact the secret from logs.
+- The message cache now has per-chat and global LRU limits, caps webhook text,
+  and safely handles prototype-like identifiers.
+
+### Fixed
+- Fetching messages no longer clears unread state. Opening a conversation uses
+  an explicit read endpoint, while background polling leaves badges intact.
+- Failed and non-2xx sends preserve the draft; an in-flight guard prevents
+  duplicate sends. Upload and reaction failures are surfaced as errors.
+- Background polling reloads configuration in a fresh process, finishes every
+  asynchronous notification lookup before stopping the service, and keeps
+  timestamps monotonic across overlapping alarm runs.
+- Invalid legacy backend URLs no longer construct a request or receive a token.
+
 ## [1.0.0] — 2026-08-21
 
 First tagged release, and a security-focused pass over the whole project.
@@ -16,10 +40,9 @@ First tagged release, and a security-focused pass over the whole project.
   a self-signed backend from Settings, off by default and behind a confirmation.
 - `allowBackup` is off. It was on, and `adb backup` could extract the API token
   from SharedPreferences.
-- Release builds have no checked-in signing configuration or key; debug
-  signing is only for local sideloading.
-- `/webhook/:secret` requires a startup-configured shared secret. The bare
-  webhook route is unavailable.
+- `release` no longer signs with the shared Android debug keystore.
+- `/webhook` accepts a shared secret in its path. It was fully open: anyone who
+  could reach the backend could inject chats and messages into the client.
 - Auth tokens are compared with `crypto.timingSafeEqual`.
 - The backend validates its environment at startup and refuses an `AUTH_TOKEN`
   under 16 characters.
@@ -59,8 +82,8 @@ First tagged release, and a security-focused pass over the whole project.
 - Media was always served as `image/jpeg`, so PNG and WebP decoded as garbage.
 - Group versus direct chat was inferred from the length of the identifier.
   A shared JID helper uses the `@g.us` suffix instead.
-- The cache grew without limit in both message count and dedup ids. It now uses
-  LRU eviction with per-chat and global bounds, and caps webhook text.
+- The cache grew without limit in both message count and dedup ids. Bounded to
+  500 messages per chat and 20 000 remembered ids.
 - Uploads accepted any file type and forwarded it as an image.
 - A malformed request body produced an HTML error page containing a stack
   trace. All errors return JSON, and `x-powered-by` is off.
@@ -75,6 +98,7 @@ First tagged release, and a security-focused pass over the whole project.
   string that had drifted to "v2.0" against a `versionName` of "1.0".
 - User-visible strings and log messages are English throughout; several were
   Czech.
-- Backend tests and CI: backend on Node 18/20/22, an APK build, and
+- Backend tests (22 cases) and CI: backend on Node 18/20/22, an APK build, and
   a dependency audit that fails on any high-severity advisory, and an Android
-  lint gate that rejects fatal/error findings.
+  lint gate. Lint went from 26 warnings and one fatal to 12 warnings and none,
+  with no remaining findings in its security category.
