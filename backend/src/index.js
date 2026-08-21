@@ -46,7 +46,10 @@ app.use(function (req, res) {
 // stack trace in it.
 app.use(function (err, req, res, next) {
   if (res.headersSent) return next(err);
-  console.error('Unhandled error on ' + req.method + ' ' + req.path + ': ' + err.message);
+  // The webhook credential lives in the URL. Never copy that URL into logs,
+  // including when express.json() rejects the body before the router runs.
+  var safePath = req.path.indexOf('/webhook/') === 0 ? '/webhook/[redacted]' : req.path;
+  console.error('Unhandled error on ' + req.method + ' ' + safePath + ': ' + err.message);
   res.status(err.status || 500).json({ error: 'Internal error' });
 });
 

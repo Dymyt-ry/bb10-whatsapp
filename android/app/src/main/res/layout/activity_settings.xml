@@ -57,6 +57,21 @@
         android:textSize="12sp"
         android:layout_marginBottom="24dp" />
 
+    <CheckBox
+        android:id="@+id/check_cleartext"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/label_cleartext"
+        android:textColor="#ffffff" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/warn_cleartext"
+        android:textColor="#ff8a80"
+        android:textSize="12sp"
+        android:layout_marginBottom="24dp" />
+
     <Button
         android:id="@+id/btn_save"
         android:layout_width="match_parent"

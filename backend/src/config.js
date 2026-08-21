@@ -1,7 +1,11 @@
 // Fail at startup rather than serving 401s to a confused user, or worse,
 // forwarding requests to Evolution API without a key.
 
-var REQUIRED = ['EVO_API_URL', 'EVO_INSTANCE_NAME', 'EVO_API_KEY', 'AUTH_TOKEN'];
+var REQUIRED = [
+  'EVO_API_URL', 'EVO_INSTANCE_NAME', 'EVO_API_KEY', 'AUTH_TOKEN',
+  'WEBHOOK_SECRET'
+];
+var WEBHOOK_SECRET_FORBIDDEN = /[^A-Za-z0-9_-]/;
 
 function load() {
   var missing = REQUIRED.filter(function (name) {
@@ -19,17 +23,19 @@ function load() {
     process.exit(1);
   }
 
-  if (!process.env.WEBHOOK_SECRET) {
-    console.warn(
-      'WEBHOOK_SECRET is not set: /webhook accepts anonymous posts, so anyone ' +
-      'who can reach this server can inject messages into your chat list.');
+  if (process.env.WEBHOOK_SECRET.length < 16
+      || WEBHOOK_SECRET_FORBIDDEN.test(process.env.WEBHOOK_SECRET)) {
+    console.error(
+      'WEBHOOK_SECRET must be at least 16 characters and contain only ' +
+      'ASCII letters, digits, underscores, or hyphens.');
+    process.exit(1);
   }
 
   return {
     evoApiUrl: process.env.EVO_API_URL.replace(/\/+$/, ''),
     evoInstance: process.env.EVO_INSTANCE_NAME,
     evoApiKey: process.env.EVO_API_KEY,
-    webhookSecret: process.env.WEBHOOK_SECRET || null,
+    webhookSecret: process.env.WEBHOOK_SECRET,
     corsOrigin: process.env.CORS_ORIGIN || null,
     port: parseInt(process.env.PORT, 10) || 3000
   };

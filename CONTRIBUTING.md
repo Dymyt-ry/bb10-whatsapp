@@ -12,7 +12,7 @@ android/   Native Java app, API 18, no AndroidX
 ```bash
 cd backend
 npm install
-npm test          # 14 cases; no network and no Evolution instance required
+npm test          # no network and no Evolution instance required
 npm run dev       # nodemon
 ```
 

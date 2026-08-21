@@ -3,19 +3,29 @@ var axios = require('axios');
 var cache = require('../cache');
 var config = require('../config');
 var router = express.Router();
+var MAX_WEBHOOK_TEXT_LENGTH = 4096;
+var MAX_IDENTIFIER_LENGTH = 256;
+var MAX_NAME_LENGTH = 256;
 
 function stripSuffix(jid) {
   if (!jid) return jid;
   return jid.replace(/@s\.whatsapp\.net$/, '').replace(/@lid$/, '');
 }
 
-// Evolution API cannot attach custom headers to its webhook, so the shared
-// secret goes in the path: POST /webhook/<secret>. Without WEBHOOK_SECRET the
-// bare /webhook path stays open, which config.js warns about at startup.
+// Evolution API cannot attach custom headers to its webhook, so the required
+// shared secret goes in the path: POST /webhook/<secret>.
 function verifySecret(req, res, next) {
-  if (!config.webhookSecret) return next();
   if (req.params.secret === config.webhookSecret) return next();
   return res.status(404).json({ error: 'Not found' });
+}
+
+function boundedText(value) {
+  return typeof value === 'string' ? value.slice(0, MAX_WEBHOOK_TEXT_LENGTH) : '';
+}
+
+function validIdentifier(value) {
+  return typeof value === 'string' && value.length > 0
+    && value.length <= MAX_IDENTIFIER_LENGTH;
 }
 
 function handleEvent(req, res) {
@@ -33,7 +43,6 @@ function handleEvent(req, res) {
   res.status(200).json({ received: true });
 }
 
-router.post('/', verifySecret, handleEvent);
 router.post('/:secret', verifySecret, handleEvent);
 
 function processReaction(reaction) {
@@ -44,8 +53,8 @@ function processReaction(reaction) {
   // belonged to, and never showed up.
   var chatId = stripSuffix(key.remoteJidAlt || key.remoteJid);
   var targetId = key.id;
-  if (targetId && chatId) {
-    cache.addReaction(chatId, targetId, reaction.text || '');
+  if (validIdentifier(targetId) && validIdentifier(chatId)) {
+    cache.addReaction(chatId, targetId, boundedText(reaction.text));
   }
 }
 
@@ -61,11 +70,11 @@ function processMessage(data) {
     if (data.message.imageMessage) {
       type = 'image';
       mediaId = messageId;
-      text = data.message.imageMessage.caption || '';
+      text = boundedText(data.message.imageMessage.caption);
     } else {
-      text = data.message.conversation
+      text = boundedText(data.message.conversation
         || (data.message.extendedTextMessage && data.message.extendedTextMessage.text)
-        || '';
+        || '');
     }
   }
 
@@ -79,12 +88,14 @@ function processMessage(data) {
   // @lid pseudonym.
   var rawChatId = key.remoteJidAlt || key.remoteJid;
   var chatId = stripSuffix(rawChatId);
+  if (!validIdentifier(messageId) || !validIdentifier(chatId)) return;
 
   cache.upsertMessage({
     id: messageId,
     chatId: chatId,
     fromMe: key.fromMe || false,
-    pushName: data.pushName || null,
+    pushName: typeof data.pushName === 'string'
+      ? data.pushName.slice(0, MAX_NAME_LENGTH) : null,
     text: text,
     timestamp: timestamp,
     type: type,

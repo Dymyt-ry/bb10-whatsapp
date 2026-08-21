@@ -12,12 +12,15 @@
     <string name="hint_api_token">Token from AUTH_TOKEN</string>
     <string name="label_self_signed">Allow self-signed certificate</string>
     <string name="warn_self_signed">Turns off certificate checking. Only tick this for a backend on a network you control.</string>
+    <string name="label_cleartext">Allow insecure HTTP</string>
+    <string name="warn_cleartext">HTTP exposes your API token and messages to anyone who can observe the network. Use only on a trusted local network.</string>
     <string name="save">Save</string>
 
     <string name="hint_message">Message</string>
     <string name="send">Send</string>
 
     <string name="settings_required">Backend URL and API token are both required</string>
+    <string name="settings_https_required">Use an https:// URL, or explicitly allow insecure HTTP</string>
     <string name="settings_saved">Settings saved</string>
     <string name="about_title">About BBWA</string>
     <string name="sender_you">You</string>

@@ -19,6 +19,7 @@ public class SettingsActivity extends Activity {
     private EditText editBackendUrl;
     private EditText editApiToken;
     private CheckBox checkSelfSigned;
+    private CheckBox checkCleartext;
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -31,12 +32,14 @@ public class SettingsActivity extends Activity {
         editBackendUrl = (EditText) findViewById(R.id.edit_backend_url);
         editApiToken = (EditText) findViewById(R.id.edit_api_token);
         checkSelfSigned = (CheckBox) findViewById(R.id.check_self_signed);
+        checkCleartext = (CheckBox) findViewById(R.id.check_cleartext);
         Button btnSave = (Button) findViewById(R.id.btn_save);
 
         SharedPreferences prefs = getSharedPreferences(ApiClient.PREFS_NAME, MODE_PRIVATE);
         editBackendUrl.setText(prefs.getString(ApiClient.KEY_BACKEND_URL, ""));
         editApiToken.setText(prefs.getString(ApiClient.KEY_API_TOKEN, ""));
         checkSelfSigned.setChecked(prefs.getBoolean(ApiClient.KEY_ALLOW_SELF_SIGNED, false));
+        checkCleartext.setChecked(prefs.getBoolean(ApiClient.KEY_ALLOW_CLEARTEXT, false));
 
         // Turning verification off is worth one confirmation; turning it back
         // on is not.
@@ -44,6 +47,14 @@ public class SettingsActivity extends Activity {
             public void onClick(View v) {
                 if (checkSelfSigned.isChecked()) {
                     confirmSelfSigned();
+                }
+            }
+        });
+
+        checkCleartext.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                if (checkCleartext.isChecked()) {
+                    confirmCleartext();
                 }
             }
         });
@@ -65,6 +76,29 @@ public class SettingsActivity extends Activity {
                         checkSelfSigned.setChecked(false);
                     }
                 })
+                .setOnCancelListener(new DialogInterface.OnCancelListener() {
+                    public void onCancel(DialogInterface dialog) {
+                        checkSelfSigned.setChecked(false);
+                    }
+                })
+                .show();
+    }
+
+    private void confirmCleartext() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.label_cleartext)
+                .setMessage(R.string.warn_cleartext)
+                .setPositiveButton(android.R.string.ok, null)
+                .setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        checkCleartext.setChecked(false);
+                    }
+                })
+                .setOnCancelListener(new DialogInterface.OnCancelListener() {
+                    public void onCancel(DialogInterface dialog) {
+                        checkCleartext.setChecked(false);
+                    }
+                })
                 .show();
     }
 
@@ -72,20 +106,27 @@ public class SettingsActivity extends Activity {
         String url = editBackendUrl.getText().toString().trim();
         String token = editApiToken.getText().toString().trim();
         boolean selfSigned = checkSelfSigned.isChecked();
+        boolean cleartext = checkCleartext.isChecked();
 
         if (url.length() == 0 || token.length() == 0) {
             Toast.makeText(this, R.string.settings_required, Toast.LENGTH_SHORT).show();
             return;
         }
+        String canonicalUrl = ApiClient.canonicalizeBackendUrl(url, cleartext);
+        if (canonicalUrl == null) {
+            Toast.makeText(this, R.string.settings_https_required, Toast.LENGTH_LONG).show();
+            return;
+        }
 
         SharedPreferences.Editor editor =
                 getSharedPreferences(ApiClient.PREFS_NAME, MODE_PRIVATE).edit();
-        editor.putString(ApiClient.KEY_BACKEND_URL, url);
+        editor.putString(ApiClient.KEY_BACKEND_URL, canonicalUrl);
         editor.putString(ApiClient.KEY_API_TOKEN, token);
         editor.putBoolean(ApiClient.KEY_ALLOW_SELF_SIGNED, selfSigned);
+        editor.putBoolean(ApiClient.KEY_ALLOW_CLEARTEXT, cleartext);
         editor.apply();
 
-        ApiClient.configure(url, token, selfSigned);
+        ApiClient.configure(canonicalUrl, token, selfSigned, cleartext);
 
         Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show();
         finish();

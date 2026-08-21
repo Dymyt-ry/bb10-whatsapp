@@ -68,10 +68,11 @@ public class MessageActivity extends Activity {
     private String fallbackName;
     // Currently displayed name (alias > contact > fallbackName).
     private String currentChatName;
-    private boolean polling = false;
+    private volatile boolean polling = false;
     private long lastClickTime = 0;
     private int lastClickPosition = -1;
     private volatile String lastMessagesJson = "";
+    private boolean sendingMessage = false;
 
     private Runnable pollRunnable = new Runnable() {
         public void run() {
@@ -171,7 +172,6 @@ public class MessageActivity extends Activity {
             }
         });
 
-        fetchMessages();
     }
 
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -237,6 +237,7 @@ public class MessageActivity extends Activity {
         }
 
         polling = true;
+        fetchMessages();
         handler.postDelayed(pollRunnable, POLL_INTERVAL);
     }
 
@@ -247,10 +248,12 @@ public class MessageActivity extends Activity {
     }
 
     private void trySend() {
+        if (sendingMessage) return;
         String text = inputField.getText().toString().trim();
         if (text.length() > 0) {
+            sendingMessage = true;
+            sendButton.setEnabled(false);
             sendMessage(text);
-            inputField.setText("");
         }
     }
 
@@ -332,8 +335,16 @@ public class MessageActivity extends Activity {
             }
             public void onResponse(okhttp3.Call call, okhttp3.Response response)
                     throws IOException {
+                final boolean successful = response.isSuccessful();
                 response.close();
-                handler.post(new Runnable() { public void run() { fetchMessages(); }});
+                handler.post(new Runnable() { public void run() {
+                    if (successful) {
+                        fetchMessages();
+                    } else {
+                        Toast.makeText(MessageActivity.this,
+                                "Failed to send image", Toast.LENGTH_SHORT).show();
+                    }
+                }});
             }
         });
     }
@@ -344,6 +355,7 @@ public class MessageActivity extends Activity {
     }
 
     private void sendReactionAsync(final Message msg, final String emoji) {
+        final String previousReaction = msg.getReaction();
         msg.setReaction(emoji.length() > 0 ? emoji : null);
         int start = listView.getFirstVisiblePosition();
         int end   = Math.min(listView.getLastVisiblePosition(), adapter.getCount() - 1);
@@ -374,7 +386,36 @@ public class MessageActivity extends Activity {
         RequestBody body = RequestBody.create(JSON, payload.toString());
         Request request = new Request.Builder().url(url).post(body).build();
         ApiClient.getClient().newCall(request).enqueue(new Callback() {
-            public void onFailure(Call call, IOException e) {}
+            public void onFailure(Call call, IOException e) {
+                restoreReaction(msg, previousReaction);
+            }
+            public void onResponse(Call call, Response response) throws IOException {
+                boolean successful = response.isSuccessful();
+                response.close();
+                if (!successful) restoreReaction(msg, previousReaction);
+            }
+        });
+    }
+
+    private void restoreReaction(final Message msg, final String previousReaction) {
+        handler.post(new Runnable() {
+            public void run() {
+                msg.setReaction(previousReaction);
+                adapter.notifyDataSetChanged();
+                Toast.makeText(MessageActivity.this,
+                        "Failed to send reaction", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void markChatRead() {
+        String url = ApiClient.getBaseUrl() + "/chat/" + chatId + "/read";
+        RequestBody body = RequestBody.create(JSON, "{}");
+        Request request = new Request.Builder().url(url).post(body).build();
+        ApiClient.getClient().newCall(request).enqueue(new Callback() {
+            public void onFailure(Call call, IOException e) {
+            }
+
             public void onResponse(Call call, Response response) throws IOException {
                 response.close();
             }
@@ -402,13 +443,17 @@ public class MessageActivity extends Activity {
 
                 final String responseBody = response.body().string();
                 response.close();
-                if (responseBody.equals(lastMessagesJson)) return;
-                lastMessagesJson = responseBody;
+                if (responseBody.equals(lastMessagesJson)) {
+                    if (polling) markChatRead();
+                    return;
+                }
 
                 Type listType = new TypeToken<List<Message>>() {}.getType();
                 final List<Message> result = new Gson().fromJson(responseBody, listType);
 
                 if (result == null) return;
+                if (polling) markChatRead();
+                lastMessagesJson = responseBody;
 
                 handler.post(new Runnable() {
                     public void run() {
@@ -432,7 +477,7 @@ public class MessageActivity extends Activity {
         });
     }
 
-    private void sendMessage(String text) {
+    private void sendMessage(final String text) {
         String url = ApiClient.getBaseUrl() + "/send";
         // Gson, not string concatenation: a message containing a backslash or
         // a newline used to produce malformed JSON and a 400 from the backend.
@@ -446,20 +491,35 @@ public class MessageActivity extends Activity {
             public void onFailure(Call call, IOException e) {
                 handler.post(new Runnable() {
                     public void run() {
-                        Toast.makeText(MessageActivity.this, "Failed to send", Toast.LENGTH_SHORT).show();
+                        finishMessageSend(false, text);
                     }
                 });
             }
 
             public void onResponse(Call call, Response response) throws IOException {
+                final boolean successful = response.isSuccessful();
                 response.close();
                 handler.post(new Runnable() {
                     public void run() {
-                        fetchMessages();
+                        finishMessageSend(successful, text);
                     }
                 });
             }
         });
+    }
+
+    private void finishMessageSend(boolean successful, String text) {
+        sendingMessage = false;
+        sendButton.setEnabled(true);
+        if (successful) {
+            if (inputField.getText().toString().trim().equals(text)) {
+                inputField.setText("");
+            }
+            fetchMessages();
+        } else {
+            Toast.makeText(MessageActivity.this,
+                    "Failed to send", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void showFullscreenImage(Message msg) {

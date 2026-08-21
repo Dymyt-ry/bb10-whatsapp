@@ -75,7 +75,7 @@ npm start
 | `EVO_INSTANCE_NAME` | yes | Evolution instance name |
 | `EVO_API_KEY` | yes | Evolution API key |
 | `AUTH_TOKEN` | yes | Token the app sends as `x-api-token`. 16 characters minimum |
-| `WEBHOOK_SECRET` | no, but | Shared secret in the webhook path. Without it, anyone who can reach the server can inject messages into your chat list |
+| `WEBHOOK_SECRET` | yes | Route-safe secret: 16+ ASCII letters, digits, `_` or `-` only |
 | `CORS_ORIGIN` | no | Only needed if a browser calls the API. The app does not |
 | `PORT` | no | Default `3000` |
 
@@ -100,10 +100,10 @@ off — the backend fetches media on demand instead of taking it inline.
 
 ## Android
 
-A prebuilt APK is attached to [the latest release](https://github.com/Dymyt-ry/bb10-whatsapp/releases/latest),
-with a SHA-256 checksum next to it. It is signed with a debug key, which is
-fine for sideloading onto your own phone and not fine for anything else — build
-`release` with your own keystore if the APK is going anywhere.
+A prebuilt debug APK is attached to [the latest release](https://github.com/Dymyt-ry/bb10-whatsapp/releases/latest),
+with a SHA-256 checksum next to it. Debug signing is suitable for local
+sideloading only; build and sign `release` with your own private key for
+distribution.
 
 To build it yourself:
 
@@ -116,9 +116,13 @@ echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties
 The APK lands in `android/app/build/outputs/apk/debug/`. Sideload it, open
 Settings on first launch, and enter the backend URL and token.
 
-`release` ships without a signing config on purpose — an earlier version signed
-it with the public Android debug keystore, which is not a signature. Pass your
-own keystore or build debug.
+The app requires an `https://` backend by default. Plain `http://` can be
+enabled separately in Settings for a trusted local network, behind a warning:
+it exposes both the API token and message traffic to network observers.
+
+`release` intentionally has no signing config or key in the repository. Supply
+your own private signing configuration, or use the debug APK for local
+sideloading.
 
 ## Setting up Evolution API v2
 
@@ -161,7 +165,8 @@ Everything except `/status` and `/webhook` requires `x-api-token`.
 |---|---|---|
 | `GET` | `/status` | Health check |
 | `GET` | `/chats` | Conversations, newest first |
-| `GET` | `/chat/:id` | Messages in a chat; clears its unread count |
+| `GET` | `/chat/:id` | Messages in a chat; does not change unread state |
+| `POST` | `/chat/:id/read` | Clear a chat's unread count when it is opened |
 | `POST` | `/chat/:id/rename` | Set a local display name |
 | `GET` | `/api/media/:messageId` | Image bytes, fetched from Evolution on demand |
 | `POST` | `/send` | `{ chatId, text }` |
@@ -183,8 +188,9 @@ Worth being explicit about, because this carries private messages:
   SharedPreferences.
 - **Tokens are compared in constant time**, and the backend refuses to start
   with a token shorter than 16 characters.
-- **The webhook takes a shared secret**, and warns loudly at startup when it
-  has none.
+- **The webhook takes a required shared secret.** The backend refuses to start
+  unless it is at least 16 characters and consists entirely of ASCII letters,
+  digits, underscores or hyphens. The bare `/webhook` route is not accepted.
 - **Message contents are never logged.** An earlier version printed the full
   text of any message that failed to send.
 
@@ -194,7 +200,7 @@ it somewhere you would be comfortable running a mail server.
 ## Development
 
 ```bash
-cd backend && npm test        # 22 cases, no network, no Evolution instance needed
+cd backend && npm test        # no external network or Evolution instance needed
 cd android  && ./gradlew assembleDebug
 ```
 
@@ -205,8 +211,8 @@ Evolution API and asserts what it sends: the path, the instance name, the
 `apikey` header, and that a message containing a backslash or a newline arrives
 byte for byte.
 
-CI builds the APK on every push, fails on any lint error, and fails on any
-high-severity advisory in a backend dependency.
+CI builds the APK on every push, rejects fatal/error lint findings, and fails
+on any high-severity advisory in a backend dependency.
 
 ### What is and isn't verified
 
@@ -220,7 +226,8 @@ Device testing is manual.
 ## Known limitations
 
 - **The cache is memory-only.** A backend restart loses history until new
-  messages arrive. It is bounded at 500 messages per chat.
+  messages arrive. It uses LRU eviction and is bounded at 500 chats, 500
+  messages per chat and 5,000 messages overall.
 - **Polling, not push.** Four seconds in the foreground, a minute in the
   background. API 18 has no FCM worth using.
 - **Text and images only.** No voice notes, video, documents or stickers.

@@ -6,13 +6,17 @@
 // eventually take the process down on a small VPS.
 
 var MAX_MESSAGES_PER_CHAT = 500;
+var MAX_CHATS = 500;
+var MAX_TOTAL_MESSAGES = 5000;
 var MAX_SEEN_IDS = 20000;
 var UNNAMED_GROUP = 'Group';
 
-var chats = {};       // chatId → chat record
-var messages = {};    // chatId → [message, ...] oldest first
+var chats = Object.create(null);       // chatId → chat record
+var messages = Object.create(null);    // chatId → [message, ...] oldest first
+var chatOrder = [];   // least-recently-used chat id first
+var totalMessages = 0;
 var seenIds = [];     // insertion-ordered message ids, for dedup
-var seenIdSet = {};   // messageId → true
+var seenIdSet = Object.create(null);   // messageId → true
 
 function markSeen(id) {
   if (seenIdSet[id]) return false;
@@ -25,6 +29,24 @@ function markSeen(id) {
     }
   }
   return true;
+}
+
+function touchChat(chatId) {
+  var index = chatOrder.indexOf(chatId);
+  if (index !== -1) chatOrder.splice(index, 1);
+  chatOrder.push(chatId);
+}
+
+function evictChat(chatId) {
+  if (messages[chatId]) totalMessages -= messages[chatId].length;
+  delete messages[chatId];
+  delete chats[chatId];
+}
+
+function enforceGlobalLimits() {
+  while (chatOrder.length > MAX_CHATS || totalMessages > MAX_TOTAL_MESSAGES) {
+    evictChat(chatOrder.shift());
+  }
 }
 
 function getChatName(msg, existingChat) {
@@ -43,6 +65,7 @@ function upsertMessage(msg) {
 
   var chatId = msg.chatId;
   var existing = chats[chatId];
+  touchChat(chatId);
 
   chats[chatId] = {
     id: chatId,
@@ -75,13 +98,18 @@ function upsertMessage(msg) {
     type: msg.type || 'text',
     mediaId: msg.mediaId || null
   });
+  totalMessages++;
 
   if (messages[chatId].length > MAX_MESSAGES_PER_CHAT) {
-    messages[chatId].splice(0, messages[chatId].length - MAX_MESSAGES_PER_CHAT);
+    var removed = messages[chatId].length - MAX_MESSAGES_PER_CHAT;
+    messages[chatId].splice(0, removed);
+    totalMessages -= removed;
   }
+  enforceGlobalLimits();
 }
 
 function renameChat(chatId, customName) {
+  touchChat(chatId);
   if (!chats[chatId]) {
     chats[chatId] = {
       id: chatId, name: customName, customName: customName,
@@ -91,6 +119,7 @@ function renameChat(chatId, customName) {
     chats[chatId].customName = customName;
     chats[chatId].name = customName;
   }
+  enforceGlobalLimits();
 }
 
 function getChats() {
@@ -100,6 +129,7 @@ function getChats() {
 }
 
 function getMessages(chatId) {
+  if (chats[chatId]) touchChat(chatId);
   return messages[chatId] || [];
 }
 
@@ -123,7 +153,7 @@ function resolveLid(lid) {
   return lidToPhone[lid] || null;
 }
 
-var lidToPhone = {};
+var lidToPhone = Object.create(null);
 
 function storeLidMapping(lid, phoneChatId) {
   lidToPhone[lid] = phoneChatId;
@@ -156,16 +186,20 @@ function addReaction(chatId, targetMsgId, emoji) {
 
 /** Test seam: drops every chat and message. */
 function reset() {
-  chats = {};
-  messages = {};
+  chats = Object.create(null);
+  messages = Object.create(null);
+  chatOrder = [];
+  totalMessages = 0;
   seenIds = [];
-  seenIdSet = {};
-  lidToPhone = {};
+  seenIdSet = Object.create(null);
+  lidToPhone = Object.create(null);
 }
 
 module.exports = {
   UNNAMED_GROUP: UNNAMED_GROUP,
   MAX_MESSAGES_PER_CHAT: MAX_MESSAGES_PER_CHAT,
+  MAX_CHATS: MAX_CHATS,
+  MAX_TOTAL_MESSAGES: MAX_TOTAL_MESSAGES,
   upsertMessage: upsertMessage,
   getChats: getChats,
   getMessages: getMessages,

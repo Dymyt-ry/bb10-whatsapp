@@ -12,10 +12,8 @@ android {
         versionName "1.0.0"
     }
 
-    // No signingConfig here on purpose. An earlier version signed "release"
-    // with the shared Android debug keystore, which produces an APK anyone can
-    // forge an update for. Supply a real keystore through Gradle properties
-    // (see CONTRIBUTING.md) or build debug and sideload that.
+    // Release intentionally has no checked-in signingConfig. Supply a private
+    // key for distribution; debug signing is only for local sideloading.
     buildTypes {
         release {
             minifyEnabled false

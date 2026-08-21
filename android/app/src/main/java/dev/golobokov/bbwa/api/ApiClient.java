@@ -30,6 +30,7 @@ import javax.net.ssl.X509TrustManager;
 import dev.golobokov.bbwa.R;
 
 import okhttp3.ConnectionSpec;
+import okhttp3.HttpUrl;
 import okhttp3.Interceptor;
 import okhttp3.MultipartBody;
 import okhttp3.OkHttpClient;
@@ -58,14 +59,18 @@ public class ApiClient {
     public static final String KEY_BACKEND_URL = "backend_url";
     public static final String KEY_API_TOKEN = "api_token";
     public static final String KEY_ALLOW_SELF_SIGNED = "allow_self_signed";
+    public static final String KEY_ALLOW_CLEARTEXT = "allow_cleartext";
 
-    private static final String DEFAULT_BASE_URL = "http://10.0.2.2:3000";
+    private static final String DEFAULT_BASE_URL = "https://backend.example.com";
 
     private static OkHttpClient client;
     private static Context appContext;
     private static String baseUrl = DEFAULT_BASE_URL;
+    private static HttpUrl backendUrl;
     private static String authToken = "";
     private static boolean allowSelfSigned = false;
+    private static boolean allowCleartext = false;
+    private static boolean configured = false;
 
     private ApiClient() {
     }
@@ -73,46 +78,94 @@ public class ApiClient {
     public static void init(Context context) {
         appContext = context.getApplicationContext();
         SharedPreferences prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        configure(
-                prefs.getString(KEY_BACKEND_URL, DEFAULT_BASE_URL),
+        String storedUrl = prefs.getString(KEY_BACKEND_URL, DEFAULT_BASE_URL);
+        boolean valid = configure(
+                storedUrl,
                 prefs.getString(KEY_API_TOKEN, ""),
-                prefs.getBoolean(KEY_ALLOW_SELF_SIGNED, false));
+                prefs.getBoolean(KEY_ALLOW_SELF_SIGNED, false),
+                prefs.getBoolean(KEY_ALLOW_CLEARTEXT, false));
+        // Upgrade valid legacy spellings once, so every future request and the
+        // Settings screen use the exact URL that OkHttp parsed. Invalid legacy
+        // values remain visible in Settings for correction, but are never used.
+        if (valid && !baseUrl.equals(storedUrl)) {
+            prefs.edit().putString(KEY_BACKEND_URL, baseUrl).apply();
+        }
     }
 
-    public static void configure(String url, String token, boolean selfSigned) {
-        baseUrl = stripTrailingSlash(url);
-        authToken = token;
-        allowSelfSigned = selfSigned;
+    public static boolean configure(String url, String token, boolean selfSigned,
+                                    boolean cleartext) {
+        String canonicalUrl = canonicalizeBackendUrl(url, cleartext);
+        boolean hasToken = token != null && token.length() > 0;
+        configured = canonicalUrl != null && hasToken;
+        backendUrl = configured ? HttpUrl.parse(canonicalUrl) : null;
+        baseUrl = configured ? canonicalUrl : DEFAULT_BASE_URL;
+        // An invalid legacy URL must not leave a credential available to an
+        // interceptor, even if a background alarm starts before Settings does.
+        authToken = configured ? token : "";
+        allowSelfSigned = configured && selfSigned;
+        allowCleartext = configured && cleartext;
         client = null;
+        return configured;
     }
 
     public static boolean isConfigured(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        return prefs.getString(KEY_BACKEND_URL, "").length() > 0
-                && prefs.getString(KEY_API_TOKEN, "").length() > 0;
+        String canonicalUrl = canonicalizeBackendUrl(
+                prefs.getString(KEY_BACKEND_URL, ""),
+                prefs.getBoolean(KEY_ALLOW_CLEARTEXT, false));
+        return canonicalUrl != null && prefs.getString(KEY_API_TOKEN, "").length() > 0;
     }
 
     public static String getBaseUrl() {
         return baseUrl;
     }
 
-    /** A trailing slash would produce "//chats" and a 404 on some proxies. */
-    private static String stripTrailingSlash(String url) {
-        if (url == null) return DEFAULT_BASE_URL;
-        String trimmed = url.trim();
-        while (trimmed.endsWith("/")) {
-            trimmed = trimmed.substring(0, trimmed.length() - 1);
+    /**
+     * Parse once with OkHttp and return the exact base URL requests will use.
+     * Prefix checks are insufficient: malformed legacy values can start with
+     * "https://" yet normalize to a different host when a Request is built.
+     */
+    public static String canonicalizeBackendUrl(String url, boolean cleartext) {
+        if (url == null) return null;
+        HttpUrl parsed = HttpUrl.parse(url.trim());
+        if (parsed == null || parsed.host() == null || parsed.host().length() == 0) {
+            return null;
         }
-        return trimmed;
+        // A backend base URL has no use for credentials, query parameters or a
+        // fragment. Rejecting them also removes user-info forms whose visible
+        // prefix can be mistaken for the host that will receive the token.
+        if (parsed.username().length() > 0 || parsed.password().length() > 0
+                || parsed.query() != null || parsed.fragment() != null) {
+            return null;
+        }
+        boolean https = "https".equals(parsed.scheme());
+        boolean permittedHttp = cleartext && "http".equals(parsed.scheme());
+        if (!https && !permittedHttp) return null;
+
+        String canonical = parsed.toString();
+        while (canonical.endsWith("/")) {
+            canonical = canonical.substring(0, canonical.length() - 1);
+        }
+        return canonical;
     }
 
     public static synchronized OkHttpClient getClient() {
         if (client != null) return client;
 
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                // A custom authentication header may survive a redirect. The
+                // configured canonical origin must be the final destination.
+                .followRedirects(false)
+                .followSslRedirects(false)
                 .addInterceptor(new Interceptor() {
                     public Response intercept(Chain chain) throws IOException {
                         Request original = chain.request();
+                        // Never attach a token after invalid legacy preferences,
+                        // or to a host/scheme/port other than the canonical base.
+                        if (!configured || backendUrl == null
+                                || !sameOrigin(original.url(), backendUrl)) {
+                            throw new IOException("Backend URL is not safely configured");
+                        }
                         Request.Builder request = original.newBuilder()
                                 .header("x-api-token", authToken);
                         // MultipartBody carries its own boundary in the
@@ -127,6 +180,12 @@ public class ApiClient {
         applyTls(builder);
         client = builder.build();
         return client;
+    }
+
+    private static boolean sameOrigin(HttpUrl requestUrl, HttpUrl configuredUrl) {
+        return requestUrl.scheme().equals(configuredUrl.scheme())
+                && requestUrl.host().equals(configuredUrl.host())
+                && requestUrl.port() == configuredUrl.port();
     }
 
     private static void applyTls(OkHttpClient.Builder builder) {
@@ -147,9 +206,9 @@ public class ApiClient {
             ConnectionSpec tls = new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
                     .tlsVersions(TlsVersion.TLS_1_2, TlsVersion.TLS_1_1)
                     .build();
-            // CLEARTEXT stays in the list so a plain http:// backend on the LAN
-            // still works.
-            builder.connectionSpecs(Arrays.asList(tls, ConnectionSpec.CLEARTEXT));
+            builder.connectionSpecs(allowCleartext
+                    ? Arrays.asList(tls, ConnectionSpec.CLEARTEXT)
+                    : Arrays.asList(tls));
 
             if (allowSelfSigned) {
                 builder.hostnameVerifier(INSECURE_HOSTNAME_VERIFIER);

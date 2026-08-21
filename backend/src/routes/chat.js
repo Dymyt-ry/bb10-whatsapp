@@ -5,8 +5,12 @@ var router = express.Router();
 var MAX_NAME_LENGTH = 128;
 
 router.get('/:id', function (req, res) {
-  cache.clearUnread(req.params.id);
   res.json(cache.getMessages(req.params.id));
+});
+
+router.post('/:id/read', function (req, res) {
+  cache.clearUnread(req.params.id);
+  res.json({ read: true, chatId: req.params.id });
 });
 
 router.post('/:id/rename', function (req, res) {
